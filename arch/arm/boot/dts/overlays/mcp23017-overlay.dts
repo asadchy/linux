@@ -46,6 +46,20 @@
 	};
 
 	fragment@3 {
+		target-path = "/aliases";
+		__overlay__ {
+			mcp23017 = "i2c1/mcp@20";
+		};
+	};
+
+	fragment@4 {
+		target-path = "/__symbols__";
+		__overlay__ {
+			mcp23017 = "i2c1/mcp@20";
+		};
+	};
+
+	fragment@5 {
 		target = <&mcp23017>;
 		__dormant__ {
 			compatible = "microchip,mcp23008";
