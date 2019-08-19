@@ -1,0 +1,43 @@
+// Device tree overlay for I2C connected Goodix gt928 multiple touch controller
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2835", "brcm,bcm2708", "brcm,bcm2709";
+
+	fragment@0 {
+		target = <&gpio>;
+		__overlay__ {
+			goodix_pins: goodix_pins {
+				brcm,pins = <28>; // interrupt
+				brcm,function = <0>; // in
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&i2c1>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			gt928: gt928@5d {
+				compatible = "goodix,gt928";
+				reg = <0x5d>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&goodix_pins>;
+				interrupt-parent = <&gpio>;
+				interrupts = <28 2>; // high-to-low edge triggered
+				irq-gpios = <&gpio 28 0>;
+				reset-gpios = <&mcp23017 6 0>;
+			};
+		};
+	};
+
+	__overrides__ {
+		interrupt = <&goodix_pins>,"brcm,pins:0",
+			<&gt928>,"interrupts:0",
+			<&gt928>,"irq-gpios:4";
+	};
+};
