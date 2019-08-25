@@ -249,7 +249,7 @@ static void ili210x_power_down(void *data)
 {
 	struct gpio_desc *reset_gpio = data;
 
-	gpiod_set_value_cansleep(reset_gpio, 1);
+	gpiod_set_value_cansleep(reset_gpio, 0);
 }
 
 static void ili210x_cancel_work(void *data)
@@ -291,6 +291,8 @@ static int ili210x_i2c_probe(struct i2c_client *client,
 
 		usleep_range(50, 100);
 		gpiod_set_value_cansleep(reset_gpio, 0);
+		msleep(100);
+		gpiod_set_value_cansleep(reset_gpio, 1);
 		msleep(100);
 	}
 
