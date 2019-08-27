@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
+#include <linux/gpio/consumer.h>
 #include <linux/spi/spi.h>
 #include <linux/of_device.h>
 #include <linux/mutex.h>
@@ -48,6 +49,7 @@ struct wm8731_priv {
 	struct regmap *regmap;
 	struct clk *mclk;
 	struct regulator_bulk_data supplies[WM8731_NUM_SUPPLIES];
+	struct gpio_desc *gpiod_mute;
 	const struct snd_pcm_hw_constraint_list *constraints;
 	unsigned int sysclk;
 	int sysclk_type;
@@ -762,6 +764,15 @@ static int wm8731_i2c_probe(struct i2c_client *i2c,
 	ret = wm8731_request_supplies(&i2c->dev, wm8731);
 	if (ret != 0)
 		return ret;
+
+	wm8731->gpiod_mute = devm_gpiod_get_optional(&i2c->dev, "mute", GPIOD_OUT_LOW);
+	if (IS_ERR(wm8731->gpiod_mute)) {
+		ret = PTR_ERR(wm8731->gpiod_mute);
+		if (ret != -EPROBE_DEFER)
+			dev_dbg(&i2c->dev, "Failed to get %s GPIO: %d\n",
+				"mute", ret);
+		return ret;
+	}
 
 	wm8731->regmap = devm_regmap_init_i2c(i2c, &wm8731_regmap);
 	if (IS_ERR(wm8731->regmap)) {
