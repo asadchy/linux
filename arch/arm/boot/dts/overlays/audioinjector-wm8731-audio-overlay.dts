@@ -24,6 +24,7 @@
 				compatible = "wlf,wm8731";
 				reg = <0x1a>;
 				status = "okay";
+				mute-gpios = <&mcp23017 4 0>;
 			};
 		};
 	};
