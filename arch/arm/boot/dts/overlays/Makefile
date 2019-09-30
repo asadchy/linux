@@ -130,6 +130,7 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
 	rpi-jd9365-gpio-backlight.dtbo \
 	rpi-jd9365-pwm-backlight.dtbo \
 	rpi-ft5406.dtbo \
+	rpi-nxp-mfrc522.dtbo \
 	rpi-poe.dtbo \
 	rpi-proto.dtbo \
 	rpi-sense.dtbo \
