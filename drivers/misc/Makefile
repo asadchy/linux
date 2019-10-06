@@ -60,4 +60,5 @@ obj-$(CONFIG_PCI_ENDPOINT_TEST)	+= pci_endpoint_test.o
 obj-$(CONFIG_OCXL)		+= ocxl/
 obj-$(CONFIG_MISC_RTSX)		+= cardreader/
 obj-$(CONFIG_MFRC522)           += mfrc522.o
+obj-$(CONFIG_DOOR_LOCK)         += door_lock.o
 
