@@ -574,6 +574,9 @@ config MFRC522
 	depends on SPI
 	tristate "NXP MFRC522 contactless reader/writer driver"
 
+config DOOR_LOCK
+	tristate "Simple GPIO based door lock device"
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
