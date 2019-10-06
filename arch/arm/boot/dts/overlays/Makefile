@@ -72,6 +72,7 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
 	goodix.dtbo \
 	googlevoicehat-soundcard.dtbo \
 	gpio-charger.dtbo \
+	gpio-door-lock.dtbo \
 	gpio-fan.dtbo \
 	gpio-hog.dtbo \
 	gpio-ir.dtbo \

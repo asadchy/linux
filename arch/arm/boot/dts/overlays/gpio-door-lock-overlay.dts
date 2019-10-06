@@ -1,0 +1,23 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			lock0: gpio-door-lock@0 {
+				compatible = "door_lock";
+				lock-gpios = <&gpio 37 0>;
+				interrupt-parent = <&gpio>;
+				interrupts = <43 2>; // high-to-low edge triggered
+				open-time = <3000>; //milliseconds
+			};
+		};
+	};
+	
+	__overrides__ {
+		open_time = <&lock0>,"open-time:0";
+	};
+};
