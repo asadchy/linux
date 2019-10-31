@@ -104,6 +104,7 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
 	mz61581.dtbo \
 	ov5647.dtbo \
 	papirus.dtbo \
+	nxp-htrc110.dtbo \
 	pi3-act-led.dtbo \
 	pi3-disable-bt.dtbo \
 	pi3-disable-wifi.dtbo \
