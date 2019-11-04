@@ -136,6 +136,7 @@ static const struct usb_device_id id_table[] = {
 	{USB_DEVICE(0x12D1, 0x14F0)},	/* Sony Gobi 3000 QDL */
 	{USB_DEVICE(0x12D1, 0x14F1)},	/* Sony Gobi 3000 Composite */
 	{USB_DEVICE(0x0AF0, 0x8120)},	/* Option GTM681W */
+	{USB_DEVICE(0x1e0e, 0x9001)},	/* SIMCom Wireless Solutions SIM700E */
 
 	/* non-Gobi Sierra Wireless devices */
 	{DEVICE_SWI(0x03f0, 0x4e1d)},	/* HP lt4111 LTE/EV-DO/HSPA+ Gobi 4G Module */
