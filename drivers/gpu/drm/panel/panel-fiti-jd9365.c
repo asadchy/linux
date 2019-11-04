@@ -24,7 +24,7 @@ struct jd9365 {
 };
 
 static const struct drm_display_mode default_mode = {
-	.clock = 68430,
+	.clock = 40000,
 	.hdisplay = 800,
 	.hsync_start = 800 + 40,
 	.hsync_end = 800 + 40 + 20,
