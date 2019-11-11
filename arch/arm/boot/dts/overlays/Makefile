@@ -280,6 +280,7 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
 	sunfounder-pironman5.dtbo \
 	superaudioboard.dtbo \
 	sx150x.dtbo \
+	ti-ina260.dtbo \
 	tc358743.dtbo \
 	tc358743-audio.dtbo \
 	tinylcd35.dtbo \
