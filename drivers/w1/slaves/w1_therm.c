@@ -92,25 +92,25 @@ static void w1_therm_remove_slave(struct w1_slave *sl)
 	sl->family_data = NULL;
 }
 
-static ssize_t w1_slave_show(struct device *device,
+static ssize_t w1_temperature_show(struct device *device,
 	struct device_attribute *attr, char *buf);
 
-static ssize_t w1_slave_store(struct device *device,
+static ssize_t w1_temperature_store(struct device *device,
 	struct device_attribute *attr, const char *buf, size_t size);
 
 static ssize_t w1_seq_show(struct device *device,
 	struct device_attribute *attr, char *buf);
 
-static DEVICE_ATTR_RW(w1_slave);
+static DEVICE_ATTR_RW(w1_temperature);
 static DEVICE_ATTR_RO(w1_seq);
 
 static struct attribute *w1_therm_attrs[] = {
-	&dev_attr_w1_slave.attr,
+	&dev_attr_w1_temperature.attr,
 	NULL,
 };
 
 static struct attribute *w1_ds28ea00_attrs[] = {
-	&dev_attr_w1_slave.attr,
+	&dev_attr_w1_temperature.attr,
 	&dev_attr_w1_seq.attr,
 	NULL,
 };
@@ -459,7 +459,7 @@ static inline int w1_convert_temp(u8 rom[9], u8 fid)
 	return 0;
 }
 
-static ssize_t w1_slave_store(struct device *device,
+static ssize_t w1_temperature_store(struct device *device,
 			      struct device_attribute *attr, const char *buf,
 			      size_t size)
 {
@@ -578,13 +578,13 @@ error:
 	return ret;
 }
 
-static ssize_t w1_slave_show(struct device *device,
+static ssize_t w1_temperature_show(struct device *device,
 			     struct device_attribute *attr, char *buf)
 {
 	struct w1_slave *sl = dev_to_w1_slave(device);
 	struct therm_info info;
 	u8 *family_data = sl->family_data;
-	int ret, i;
+	int ret;
 	ssize_t c = PAGE_SIZE;
 	u8 fid = sl->family->fid;
 
@@ -592,20 +592,14 @@ static ssize_t w1_slave_show(struct device *device,
 	if (ret)
 		return ret;
 
-	for (i = 0; i < 9; ++i)
-		c -= snprintf(buf + PAGE_SIZE - c, c, "%02x ", info.rom[i]);
-	c -= snprintf(buf + PAGE_SIZE - c, c, ": crc=%02x %s\n",
-		      info.crc, (info.verdict) ? "YES" : "NO");
-	if (info.verdict)
+	if (info.verdict) {
 		memcpy(family_data, info.rom, sizeof(info.rom));
-	else
+	} else {
 		dev_warn(device, "Read failed CRC check\n");
+		return -EIO;
+	}
 
-	for (i = 0; i < 9; ++i)
-		c -= snprintf(buf + PAGE_SIZE - c, c, "%02x ",
-			      ((u8 *)family_data)[i]);
-
-	c -= snprintf(buf + PAGE_SIZE - c, c, "t=%d\n",
+	c -= snprintf(buf + PAGE_SIZE - c, c, "%d\n",
 			w1_convert_temp(info.rom, fid));
 	ret = PAGE_SIZE - c;
 	return ret;
