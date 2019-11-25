@@ -12,7 +12,7 @@
 				din-gpios = <&gpio 24 0>;
 				dout-gpios = <&gpio 23 0>;
 				sclk-gpios = <&gpio 22 0>;
-				cs-gpios = <&gpio 25 0>;
+				cs-gpios = <&gpio 8 0>;
 
 				interrupt-parent = <&gpio>;
 				interrupts = <24 1>; // low-to-high edge triggered
