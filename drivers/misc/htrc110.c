@@ -780,7 +780,7 @@ static int htrc110_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&ctx->dwork, htrc110_work);
 
 	if(ctx->gpiod_cs)
-		htrc110_cs_low(ctx);
+		htrc110_cs_high(ctx);
 
 	return 0;
 }
@@ -794,7 +794,7 @@ static int htrc110_remove(struct platform_device *pdev)
 	htrc110_power_down(ctx);
 
 	if(ctx->gpiod_cs)
-		htrc110_cs_high(ctx);
+		htrc110_cs_low(ctx);
 
 	mutex_lock(&device_list_lock);
 	list_del(&ctx->device_entry);
