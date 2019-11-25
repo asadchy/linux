@@ -873,7 +873,6 @@ static int mfrc522_probe(struct spi_device *spi)
 
 	spi->bits_per_word = 8;
 	spi->mode = SPI_MODE_0;
-	spi->max_speed_hz = 10000;
 	ret = spi_setup(spi);
 	if (ret < 0)
 		return ret;
