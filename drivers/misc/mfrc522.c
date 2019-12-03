@@ -43,6 +43,8 @@
 #define MFRC522_RX_DATA_MAX_LEN     18
 #define MFRC522_BLOCK_SIZE			16
 #define MFRC522_KEY_SIZE			16
+#define MFRC522_CARD_TYPE_SIZE		2
+#define MFRC522_SERIAL_SIZE			8
 
 #define MFRC522_PCD_IDLE            0x00    /* Cancle the current command */
 #define MFRC522_PCD_AUTHENT         0x0E    /* Authentication key */
@@ -142,6 +144,10 @@
 
 #define MFRC522_NUM_MINORS			1
 
+#define MIFARE_UID_SIZE_MASK		0x40
+
+#define MFRC522_KBITS_TO_BLOCKS(x)	((x) * 8)
+
 struct mfrc522 {
 	struct spi_device *spi;
 	struct gpio_desc *gpiod_rst;
@@ -153,6 +159,7 @@ struct mfrc522 {
 	dev_t devt;
 
 	u8 block_data[MFRC522_BLOCK_SIZE];
+	int blocks_num;
 };
 
 static LIST_HEAD(device_list);
@@ -419,7 +426,7 @@ static int mfrc522_rfid_request (struct mfrc522 *ctx, u8 req_code, u8 *card_type
     return ret;
 }
 
-static int mfrc522_rfid_anticoll(struct mfrc522 *ctx, u8 *serial_num)
+static int mfrc522_rfid_anticoll(struct mfrc522 *ctx, u8 select, u8 *serial_num)
 {
     int ret;
     u8 i;
@@ -439,7 +446,7 @@ static int mfrc522_rfid_anticoll(struct mfrc522 *ctx, u8 *serial_num)
 	if(ret < 0)
 		return ret;
 
-    com_buf[0] = MFRC522_PICC_ANTICOLL1;
+    com_buf[0] = select;
     com_buf[1] = 0x20;
 
     ret = mfrc522_rfid_com(ctx, MFRC522_PCD_TRANSCEIVE, com_buf, 2, com_buf, &len);
@@ -454,7 +461,7 @@ static int mfrc522_rfid_anticoll(struct mfrc522 *ctx, u8 *serial_num)
     return mfrc522_set_register_bitmask(ctx, MFRC522_COLL_REG, 0x80);
 }
 
-static int mfrc522_rfid_select(struct mfrc522 *ctx, u8 *serial_num)
+static int mfrc522_rfid_select(struct mfrc522 *ctx, u8 select, u8 *serial_num)
 {
     int ret;
     int i;
@@ -462,7 +469,7 @@ static int mfrc522_rfid_select(struct mfrc522 *ctx, u8 *serial_num)
     u8 com_buf[MFRC522_RX_DATA_MAX_LEN];
     u16 crc;
 
-    com_buf[0] = MFRC522_PICC_ANTICOLL1;
+    com_buf[0] = select;
     com_buf[1] = 0x70;
     com_buf[6] = 0;
 
@@ -560,19 +567,34 @@ static int mfrc522_rfid_write(struct mfrc522 *ctx, u8 block_addr, u8 *data)
     return ret;
 }
 
-static int mfrc522_rfid_setup(struct mfrc522 *ctx, u8 *card_rev, u8 *card_serial)
+static int mfrc522_rfid_setup_ssuid(struct mfrc522 *ctx, u8 *card_rev, u8 *card_serial)
 {
 	int ret;
 
-	ret = mfrc522_rfid_request(ctx, MFRC522_PICC_REQIDL, card_rev);
+	ret = mfrc522_rfid_anticoll(ctx, MFRC522_PICC_ANTICOLL1, card_serial);
 	if(ret < 0)
 		return ret;
 
-	ret = mfrc522_rfid_anticoll(ctx, card_serial);
+	return mfrc522_rfid_select(ctx, MFRC522_PICC_ANTICOLL1, card_serial);
+}
+
+static int mfrc522_rfid_setup_dsuid(struct mfrc522 *ctx, u8 *card_rev, u8 *card_serial)
+{
+	int ret;
+
+	ret = mfrc522_rfid_anticoll(ctx, MFRC522_PICC_ANTICOLL1, card_serial);
 	if(ret < 0)
 		return ret;
 
-	return mfrc522_rfid_select(ctx, card_serial);
+	ret = mfrc522_rfid_select(ctx, MFRC522_PICC_ANTICOLL1, card_serial);
+	if(ret < 0)
+		return ret;
+
+	ret = mfrc522_rfid_anticoll(ctx, MFRC522_PICC_ANTICOLL2, &card_serial[4]);
+	if(ret < 0)
+		return ret;
+
+	return ret = mfrc522_rfid_select(ctx, MFRC522_PICC_ANTICOLL2, &card_serial[4]);;
 }
 
 static int mfrc522_rfid_auth_state(struct mfrc522 *ctx, u8 auth_mode, u8 addr, u8 *key, u8 *serial_num)
@@ -622,43 +644,57 @@ static int mfrc522_rfid_halt(struct mfrc522 *ctx)
     return mfrc522_rfid_com(ctx, MFRC522_PCD_TRANSCEIVE, com_buf, 4, com_buf, &len);
 }
 
-static int mfrc522_rfid_read_block(struct mfrc522 *ctx, u8 block_addr, u8 *data)
+static int mfrc522_rfid_auth(struct mfrc522 *ctx, u8 block_addr)
 {
 	int ret;
-	u8 card_type[2];
-	u8 card_serial[4];
+	u8 card_type[MFRC522_CARD_TYPE_SIZE];
+	u8 card_serial[MFRC522_SERIAL_SIZE];
+	u8 *card_serial_ptr;
 
-	ret = mfrc522_rfid_setup(ctx, card_type, card_serial);
+	ret = mfrc522_rfid_request(ctx, MFRC522_PICC_REQIDL, card_type);
 	if(ret >= 0) {
-		ret = mfrc522_rfid_auth_state(ctx, MFRC522_PICC_AUTHENT1B, block_addr, defaut_key, card_serial);
-		if(ret >= 0) {
-			ret = mfrc522_rfid_read(ctx, block_addr, data);
+		if(card_type[0] & MIFARE_UID_SIZE_MASK) {
+			ret = mfrc522_rfid_setup_dsuid(ctx, card_type, card_serial);
+			card_serial_ptr = &card_serial[4];
+		} else {
+			ret = mfrc522_rfid_setup_ssuid(ctx, card_type, card_serial);
+			card_serial_ptr = card_serial;
 		}
-		mfrc522_rfid_halt(ctx);
+		if(ret >= 0) {
+			ctx->blocks_num = MFRC522_KBITS_TO_BLOCKS(ret);
+			ret = mfrc522_rfid_auth_state(ctx, MFRC522_PICC_AUTHENT1A, block_addr, defaut_key, card_serial_ptr);
+		}
 	}
+
+	return ret;
+}
+
+static int mfrc522_rfid_read_block(struct mfrc522 *ctx, u8 block_addr, u8 *data)
+{
+	int ret = mfrc522_rfid_auth(ctx, block_addr);
+	if(ret >= 0) {
+		if(block_addr < ctx->blocks_num) {
+			ret = mfrc522_rfid_read(ctx, block_addr, data);
+		} else {
+			ret = -EINVAL;
+		}
+	}
+	mfrc522_rfid_halt(ctx);
 
 	return ret;
 }
 
 static int mfrc522_rfid_write_block(struct mfrc522 *ctx, u8 block_addr, u8 *data)
 {
-	int ret;
-	u8 card_type[2];
-	u8 card_serial[4];
-
-	/* avoid writing to KEY blocks and check block address */
-	if((block_addr > NFC_TAG_MAX_BLOCKS_NUM) || block_addr % 4 == 3) {
-		return -EINVAL;
-	}
-
-	ret = mfrc522_rfid_setup(ctx, card_type, card_serial);
+	int ret = mfrc522_rfid_auth(ctx, block_addr);
 	if(ret >= 0) {
-		ret = mfrc522_rfid_auth_state(ctx, MFRC522_PICC_AUTHENT1B, block_addr, defaut_key, card_serial);
-		if(ret >= 0) {
+		if(block_addr < ctx->blocks_num) {
 			ret = mfrc522_rfid_write(ctx, block_addr, data);
+		} else {
+			ret = -EINVAL;
 		}
-		mfrc522_rfid_halt(ctx);
 	}
+	mfrc522_rfid_halt(ctx);
 
 	return ret;
 }
