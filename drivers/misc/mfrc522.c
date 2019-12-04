@@ -35,16 +35,19 @@
 #include <linux/gpio/consumer.h>
 #include <linux/delay.h>
 #include <linux/uaccess.h>
-
-#define NFC_TAG_MAX_BLOCKS_NUM		40
+#include <linux/ioctl.h>
 
 #define MFRC522_READ_MASK			0x80
 #define MFRC522_FIFO_DEPTH		    64
 #define MFRC522_RX_DATA_MAX_LEN     18
 #define MFRC522_BLOCK_SIZE			16
-#define MFRC522_KEY_SIZE			16
+#define MFRC522_KEY_SIZE			6
 #define MFRC522_CARD_TYPE_SIZE		2
 #define MFRC522_SERIAL_SIZE			8
+#define MFRC522_KEYS_NUM			2
+
+#define MFRC522_KEY_A				0
+#define MFRC522_KEY_B				1
 
 #define MFRC522_PCD_IDLE            0x00    /* Cancle the current command */
 #define MFRC522_PCD_AUTHENT         0x0E    /* Authentication key */
@@ -148,6 +151,28 @@
 
 #define MFRC522_KBITS_TO_BLOCKS(x)	((x) * 8)
 
+#define MFRC522_IOC_MAGIC			'a'
+
+#define MFRC522_IOC_SET_BL_ADDR		1
+#define MFRC522_IOC_GET_BL_ADDR		2
+#define MFRC522_IOC_SET_KEYA		3
+#define MFRC522_IOC_SET_KEYB		4
+#define MFRC522_IOC_GET_KEYA		5
+#define MFRC522_IOC_GET_KEYB		6
+#define MFRC522_IOC_SET_KEY			7
+#define MFRC522_IOC_GET_KEY			8
+
+#define MFRC522_IOCSBLADDR			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_BL_ADDR, int)
+#define MFRC522_IOCGBLADDR			_IOR(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_BL_ADDR, int)
+
+#define MFRC522_IOCSKEYA			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_KEYA, char*)
+#define MFRC522_IOCSKEYB			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_KEYB, char*)
+#define MFRC522_IOCGKEYA			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEYA, char*)
+#define MFRC522_IOCGKEYB			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEYB, char*)
+
+#define MFRC522_IOCSKEY				_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_KEY, int)
+#define MFRC522_IOCGKEY				_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEY, int)
+
 struct mfrc522 {
 	struct spi_device *spi;
 	struct gpio_desc *gpiod_rst;
@@ -160,6 +185,9 @@ struct mfrc522 {
 
 	u8 block_data[MFRC522_BLOCK_SIZE];
 	int blocks_num;
+	u8 key[MFRC522_KEYS_NUM][MFRC522_KEY_SIZE];
+	int key_idx;
+	int block_addr;
 };
 
 static LIST_HEAD(device_list);
@@ -167,9 +195,7 @@ static DEFINE_MUTEX(device_list_lock);
 
 static DECLARE_BITMAP(minors, MFRC522_NUM_MINORS);
 
-static u8 defaut_key[MFRC522_KEY_SIZE] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-										  0xFF, 0xFF, 0xFF, 0xFF,
-										  0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static const u8 mfrc522_auth_cmd[MFRC522_KEYS_NUM] = {MFRC522_PICC_AUTHENT1A, MFRC522_PICC_AUTHENT1B};
 
 static int mfrc522_write_reg_seq(struct mfrc522 *ctx, u8 reg, u8 *data, size_t len)
 {
@@ -662,7 +688,8 @@ static int mfrc522_rfid_auth(struct mfrc522 *ctx, u8 block_addr)
 		}
 		if(ret >= 0) {
 			ctx->blocks_num = MFRC522_KBITS_TO_BLOCKS(ret);
-			ret = mfrc522_rfid_auth_state(ctx, MFRC522_PICC_AUTHENT1A, block_addr, defaut_key, card_serial_ptr);
+			ret = mfrc522_rfid_auth_state(ctx, mfrc522_auth_cmd[ctx->key_idx], block_addr,
+					ctx->key[ctx->key_idx], card_serial_ptr);
 		}
 	}
 
@@ -707,6 +734,13 @@ static int mfrc522_antenna_on(struct mfrc522 *ctx)
 static int mfrc522_antenna_off(struct mfrc522 *ctx)
 {
 	return mfrc522_clear_register_bitmask(ctx, MFRC522_TX_CONTROL_REG, 0x03);
+}
+
+static void mfrc522_set_default_parameters(struct mfrc522 *ctx)
+{
+	ctx->block_addr = 0;
+	ctx->key_idx = MFRC522_KEY_A;
+	memset(ctx->key, 0xFF, sizeof(ctx->key));
 }
 
 static int mfrc522_init(struct mfrc522 *ctx)
@@ -799,7 +833,7 @@ static void mfrc522_work(struct work_struct *work)
 
 	struct mfrc522 *ctx = container_of(work, struct mfrc522, dwork.work);
 
-	ret = mfrc522_rfid_read_block(ctx, 0, ctx->block_data);
+	ret = mfrc522_rfid_read_block(ctx, ctx->block_addr, ctx->block_data);
 	if(ret == 0) {
 		complete(&ctx->request_completion);
 	} else {
@@ -823,6 +857,74 @@ static int mfrc522_fops_open(struct inode *inode, struct file *filp)
 		}
 	}
 	mutex_unlock(&device_list_lock);
+
+	return ret;
+}
+
+static long mfrc522_fops_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	long ret = 0;
+	struct mfrc522 *ctx = filp->private_data;
+
+	if(mutex_lock_interruptible(&ctx->tag_data_lock) < 0)
+		return -EINTR;
+
+	switch(cmd)
+	{
+		case MFRC522_IOCSBLADDR:
+		{
+			ret = copy_from_user(&ctx->block_addr, (const void*)arg, sizeof(ctx->block_addr));
+			break;
+		}
+
+		case MFRC522_IOCGBLADDR:
+		{
+			ret = copy_to_user((void*)arg, &ctx->block_addr, sizeof(ctx->block_addr));
+			break;
+		}
+
+		case MFRC522_IOCSKEYA:
+		{
+			ret = copy_from_user(&ctx->key[MFRC522_KEY_A], (const void*)arg, MFRC522_KEY_SIZE);
+			break;
+		}
+
+		case MFRC522_IOCSKEYB:
+		{
+			ret = copy_from_user(&ctx->key[MFRC522_KEY_B], (const void*)arg, MFRC522_KEY_SIZE);
+			break;
+		}
+
+		case MFRC522_IOCGKEYA:
+		{
+			ret = copy_to_user((void*)arg, &ctx->key[MFRC522_KEY_A], MFRC522_KEY_SIZE);
+			break;
+		}
+
+		case MFRC522_IOCGKEYB:
+		{
+			ret = copy_to_user((void*)arg, &ctx->key[MFRC522_KEY_B], MFRC522_KEY_SIZE);
+			break;
+		}
+
+		case MFRC522_IOCSKEY:
+		{
+			ret = copy_from_user(&ctx->key_idx, (const void*)arg, sizeof(ctx->key_idx));
+			break;
+		}
+
+		case MFRC522_IOCGKEY:
+		{
+			ret = copy_to_user((void*)arg, &ctx->key_idx, sizeof(ctx->key_idx));
+			break;
+		}
+
+		default:
+		{
+			ret = -ENOTTY;
+		}
+	}
+	mutex_unlock(&ctx->tag_data_lock);
 
 	return ret;
 }
@@ -865,10 +967,9 @@ static ssize_t mfrc522_fops_write(struct file *filp, const char __user *buf, siz
 	ssize_t ret;
 	int status;
 	struct mfrc522 *ctx = filp->private_data;
-	u8 mfrc522_data[MFRC522_BLOCK_SIZE + 1];
+	u8 mfrc522_data[MFRC522_BLOCK_SIZE];
 
-	/* block data + block address */
-	if(count < MFRC522_BLOCK_SIZE + 1)
+	if(count < MFRC522_BLOCK_SIZE)
 		return -EINVAL;
 
 	if(copy_from_user(mfrc522_data, buf, sizeof(mfrc522_data)) != 0) {
@@ -878,9 +979,9 @@ static ssize_t mfrc522_fops_write(struct file *filp, const char __user *buf, siz
 	if(mutex_lock_interruptible(&ctx->tag_data_lock) < 0)
 		return -EINTR;
 
-	status = mfrc522_rfid_write_block(ctx, mfrc522_data[0], &mfrc522_data[1]);
+	status = mfrc522_rfid_write_block(ctx, ctx->block_addr, mfrc522_data);
 	if(status < 0) {
-		ret = -ENODEV;
+		ret = status;
 	} else {
 		ret = count;
 	}
@@ -895,6 +996,7 @@ static const struct file_operations mfrc522_fops = {
 	.open = mfrc522_fops_open,
 	.read = mfrc522_fops_read,
 	.write = mfrc522_fops_write,
+	.unlocked_ioctl = mfrc522_fops_ioctl,
 };
 
 static struct class *mfrc522_class;
@@ -918,6 +1020,8 @@ static int mfrc522_probe(struct spi_device *spi)
 		return -ENOMEM;
 
 	ctx->spi = spi;
+
+	mfrc522_set_default_parameters(ctx);
 
 	ctx->gpiod_rst = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(ctx->gpiod_rst)) {
