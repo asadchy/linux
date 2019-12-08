@@ -45,6 +45,8 @@
 #define MFRC522_CARD_TYPE_SIZE		2
 #define MFRC522_SERIAL_SIZE			8
 #define MFRC522_KEYS_NUM			2
+#define MFRC522_4BYTEUID			4
+#define MFRC522_7BYTEUID			7
 
 #define MFRC522_KEY_A				0
 #define MFRC522_KEY_B				1
@@ -161,17 +163,22 @@
 #define MFRC522_IOC_GET_KEYB		6
 #define MFRC522_IOC_SET_KEY			7
 #define MFRC522_IOC_GET_KEY			8
+#define MFRC522_IOC_SET_RO_ID		9
+#define MFRC522_IOC_GET_RO_ID		10
 
 #define MFRC522_IOCSBLADDR			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_BL_ADDR, int)
 #define MFRC522_IOCGBLADDR			_IOR(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_BL_ADDR, int)
 
 #define MFRC522_IOCSKEYA			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_KEYA, char*)
 #define MFRC522_IOCSKEYB			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_KEYB, char*)
-#define MFRC522_IOCGKEYA			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEYA, char*)
-#define MFRC522_IOCGKEYB			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEYB, char*)
+#define MFRC522_IOCGKEYA			_IOR(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEYA, char*)
+#define MFRC522_IOCGKEYB			_IOR(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEYB, char*)
 
 #define MFRC522_IOCSKEY				_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_KEY, int)
-#define MFRC522_IOCGKEY				_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEY, int)
+#define MFRC522_IOCGKEY				_IOR(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_KEY, int)
+
+#define MFRC522_IOCSROID			_IOW(MFRC522_IOC_MAGIC, MFRC522_IOC_SET_RO_ID, int)
+#define MFRC522_IOCGROID			_IOR(MFRC522_IOC_MAGIC, MFRC522_IOC_GET_RO_ID, int)
 
 struct mfrc522 {
 	struct spi_device *spi;
@@ -188,6 +195,7 @@ struct mfrc522 {
 	u8 key[MFRC522_KEYS_NUM][MFRC522_KEY_SIZE];
 	int key_idx;
 	int block_addr;
+	int read_only_id;
 };
 
 static LIST_HEAD(device_list);
@@ -711,6 +719,35 @@ static int mfrc522_rfid_read_block(struct mfrc522 *ctx, u8 block_addr, u8 *data)
 	return ret;
 }
 
+static int mfrc522_rfid_read_uid(struct mfrc522 *ctx)
+{
+	int ret;
+	u8 card_type[MFRC522_CARD_TYPE_SIZE];
+	u8 card_serial[MFRC522_SERIAL_SIZE];
+
+	ret = mfrc522_rfid_request(ctx, MFRC522_PICC_REQIDL, card_type);
+	if(ret >= 0) {
+		if(card_type[0] & MIFARE_UID_SIZE_MASK) {
+			ret = mfrc522_rfid_setup_dsuid(ctx, card_type, card_serial);
+			if(ret >= 0) {
+				memset(ctx->block_data, 0x00, MFRC522_BLOCK_SIZE);
+				memcpy(ctx->block_data, &card_serial[1], MFRC522_7BYTEUID);
+				ret = 0;
+			}
+		} else {
+			ret = mfrc522_rfid_setup_ssuid(ctx, card_type, card_serial);
+			if(ret >= 0) {
+				memset(ctx->block_data, 0x00, MFRC522_BLOCK_SIZE);
+				memcpy(ctx->block_data, card_serial, MFRC522_4BYTEUID);
+				ret = 0;
+			}
+		}
+	}
+	mfrc522_rfid_halt(ctx);
+
+	return ret;
+}
+
 static int mfrc522_rfid_write_block(struct mfrc522 *ctx, u8 block_addr, u8 *data)
 {
 	int ret = mfrc522_rfid_auth(ctx, block_addr);
@@ -740,6 +777,7 @@ static void mfrc522_set_default_parameters(struct mfrc522 *ctx)
 {
 	ctx->block_addr = 0;
 	ctx->key_idx = MFRC522_KEY_A;
+	ctx->read_only_id = 1;
 	memset(ctx->key, 0xFF, sizeof(ctx->key));
 }
 
@@ -833,7 +871,12 @@ static void mfrc522_work(struct work_struct *work)
 
 	struct mfrc522 *ctx = container_of(work, struct mfrc522, dwork.work);
 
-	ret = mfrc522_rfid_read_block(ctx, ctx->block_addr, ctx->block_data);
+	if(ctx->read_only_id) {
+		ret = mfrc522_rfid_read_uid(ctx);
+	} else {
+		ret = mfrc522_rfid_read_block(ctx, ctx->block_addr, ctx->block_data);
+	}
+
 	if(ret == 0) {
 		complete(&ctx->request_completion);
 	} else {
@@ -916,6 +959,18 @@ static long mfrc522_fops_ioctl(struct file *filp, unsigned int cmd, unsigned lon
 		case MFRC522_IOCGKEY:
 		{
 			ret = copy_to_user((void*)arg, &ctx->key_idx, sizeof(ctx->key_idx));
+			break;
+		}
+
+		case MFRC522_IOCSROID:
+		{
+			ret = copy_from_user(&ctx->read_only_id, (const void*)arg, sizeof(ctx->read_only_id));
+			break;
+		}
+
+		case MFRC522_IOCGROID:
+		{
+			ret = copy_to_user((void*)arg, &ctx->read_only_id, sizeof(&ctx->read_only_id));
 			break;
 		}
 
