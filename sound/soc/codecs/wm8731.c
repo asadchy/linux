@@ -374,12 +374,21 @@ static int wm8731_hw_params(struct snd_pcm_substream *substream,
 static int wm8731_mute(struct snd_soc_dai *dai, int mute)
 {
 	struct snd_soc_component *component = dai->component;
+	struct wm8731_priv *ctx = dev_get_drvdata(dai->dev);
 	u16 mute_reg = snd_soc_component_read32(component, WM8731_APDIGI) & 0xfff7;
-
-	if (mute)
+	if (mute) {
+		if(ctx->gpiod_mute) {
+			gpiod_set_value_cansleep(ctx->gpiod_mute, 1);
+			msleep(100);
+		}
 		snd_soc_component_write(component, WM8731_APDIGI, mute_reg | 0x8);
-	else
+	} else {
 		snd_soc_component_write(component, WM8731_APDIGI, mute_reg);
+		if(ctx->gpiod_mute) {
+			msleep(250);
+			gpiod_set_value_cansleep(ctx->gpiod_mute, 0);
+		}
+	}
 	return 0;
 }
 
@@ -765,7 +774,7 @@ static int wm8731_i2c_probe(struct i2c_client *i2c,
 	if (ret != 0)
 		return ret;
 
-	wm8731->gpiod_mute = devm_gpiod_get_optional(&i2c->dev, "mute", GPIOD_OUT_LOW);
+	wm8731->gpiod_mute = devm_gpiod_get_optional(&i2c->dev, "mute", GPIOD_OUT_HIGH);
 	if (IS_ERR(wm8731->gpiod_mute)) {
 		ret = PTR_ERR(wm8731->gpiod_mute);
 		if (ret != -EPROBE_DEFER)
