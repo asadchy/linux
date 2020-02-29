@@ -48,6 +48,9 @@ struct door_lock {
 	struct delayed_work dwork;
 	struct list_head device_entry;
 	struct mutex mutex_lock;
+	struct mutex button_mutex_lock;
+	struct completion button_completion;
+	int button_pressing_counter;
 	dev_t devt;
 	int irq;
 	bool const_open;
@@ -118,10 +121,42 @@ static ssize_t door_lock_fops_write(struct file *filp, const char __user *buf, s
 	return count;
 }
 
+static ssize_t door_lock_fops_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
+{
+	ssize_t ret;
+	unsigned long status;
+	struct door_lock *ctx = filp->private_data;
+
+	if(count < sizeof(ctx->button_pressing_counter))
+		return -EINVAL;
+
+	if(mutex_lock_interruptible(&ctx->button_mutex_lock) < 0)
+		return -EINTR;
+
+	reinit_completion(&ctx->button_completion);
+
+	if(wait_for_completion_interruptible(&ctx->button_completion) < 0) {
+		mutex_unlock(&ctx->button_mutex_lock);
+		return -EINTR;
+	}
+
+	status = copy_to_user(buf, &ctx->button_pressing_counter, sizeof(ctx->button_pressing_counter));
+	mutex_unlock(&ctx->button_mutex_lock);
+
+	if(status == 0) {
+		ret = sizeof(ctx->button_pressing_counter);
+	} else {
+		ret = -EAGAIN;
+	}
+
+	return ret;
+}
+
 static const struct file_operations door_lock_fops = {
 	.owner = THIS_MODULE,
 	.open = door_lock_fops_open,
 	.write = door_lock_fops_write,
+	.read = door_lock_fops_read,
 };
 
 static irqreturn_t door_lock_threaded_irq(int irq, void *dev_id)
@@ -132,6 +167,8 @@ static irqreturn_t door_lock_threaded_irq(int irq, void *dev_id)
 
 	if(!delayed_work_pending(&ctx->dwork) && !ctx->const_open) {
 		door_lock_open(ctx);
+		ctx->button_pressing_counter++;
+		complete(&ctx->button_completion);
 		schedule_delayed_work(&ctx->dwork, msecs_to_jiffies(ctx->delay));
 	}
 
@@ -188,6 +225,8 @@ static int door_lock_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&ctx->device_entry);
 	INIT_DELAYED_WORK(&ctx->dwork, door_lock_work);
 	mutex_init(&ctx->mutex_lock);
+	mutex_init(&ctx->button_mutex_lock);
+	init_completion(&ctx->button_completion);
 
 	mutex_lock(&device_list_lock);
 	minor = find_first_zero_bit(minors, DOOR_LOCK_NUM_MINORS);
@@ -223,6 +262,8 @@ dev_destroy:
 	clear_bit(MINOR(ctx->devt), minors);
 	mutex_unlock(&device_list_lock);
 	mutex_destroy(&ctx->mutex_lock);
+	mutex_destroy(&ctx->button_mutex_lock);
+	complete_release(&ctx->button_completion);
 
 	return ret;
 }
@@ -239,6 +280,8 @@ static int door_lock_remove(struct platform_device *pdev)
 
 	cancel_delayed_work_sync(&ctx->dwork);
 	mutex_destroy(&ctx->mutex_lock);
+	mutex_destroy(&ctx->button_mutex_lock);
+	complete_release(&ctx->button_completion);
 
 	return 0;
 }
