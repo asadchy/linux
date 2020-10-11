@@ -531,6 +531,9 @@ config DOOR_LOCK
 config HTRC110
 	tristate "NXP HTRC110 hitag readed driver"
 
+config IN_PI556
+	tristate "Support DMA user access to IN-PI556 LEDs"
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

@@ -62,4 +62,5 @@ obj-$(CONFIG_MISC_RTSX)		+= cardreader/
 obj-$(CONFIG_MFRC522)           += mfrc522.o
 obj-$(CONFIG_DOOR_LOCK)         += door_lock.o
 obj-$(CONFIG_HTRC110)           += htrc110.o
+obj-$(CONFIG_IN_PI556)          += ws2812.o
 
