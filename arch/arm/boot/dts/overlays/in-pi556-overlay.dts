@@ -2,7 +2,7 @@
 /plugin/;
 
 / {
-	compatible = "brcm,bcm2708";
+	compatible = "brcm,bcm2835", "brcm,bcm2708", "brcm,bcm2709";
 
 	fragment@0 {
 		target = <&soc>;
@@ -15,7 +15,6 @@
 				reg = <0x7e20c000 0x100>; /* PWM */
 				dmas = <&dma 5>;
 				dma-names = "pwm_dma";
-				led-en-gpios = <&gpio 43 0>;
 
 				rpi,invert = <0>;
 				rpi,num_leds = <1>;
