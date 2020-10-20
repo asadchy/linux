@@ -10,14 +10,14 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			ws2812: ws2812 {
-				compatible = "rpi,ws2812";
+			in_pi556: in_pi556 {
+				compatible = "rpi,in-pi556";
 				reg = <0x7e20c000 0x100>; /* PWM */
 				dmas = <&dma 5>;
 				dma-names = "pwm_dma";
 				led-en-gpios = <&gpio 43 0>;
 
-				rpi,invert = <1>;
+				rpi,invert = <0>;
 				rpi,num_leds = <1>;
 
 				status = "okay";
@@ -27,7 +27,7 @@
 	};
 
 	__overrides__ {
-	invert = <&ws2812>,"rpi,invert:0";
-        num_leds = <&ws2812>,"rpi,num_leds:0";
+	invert = <&in_pi556>,"rpi,invert:0";
+        num_leds = <&in_pi556>,"rpi,num_leds:0";
 	};
 };
