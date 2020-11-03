@@ -68,27 +68,26 @@
 #include <linux/uaccess.h>
 #include <linux/of.h>
 #include <linux/gpio/consumer.h>
+#include <linux/pwm.h>
 #include <asm-generic/ioctl.h>
 
 #define DRIVER_NAME "in-pi556"
 
 struct in_pi556_state {
-	struct device *        dev;
+	struct device          *dev;
     struct cdev            cdev;
-    struct class *         cl;
-    struct dma_chan *      dma_chan;
-	dma_addr_t dma_addr;
+    struct class           *cl;
+    struct dma_chan        *dma_chan;
+	dma_addr_t             dma_addr;
 
-    void __iomem *         ioaddr;
+    struct pwm_device      *pwm;
+    void __iomem           *ioaddr;
     phys_addr_t            phys_addr;
 
-    uint8_t *              buffer;
-    uint32_t *             pixbuf;
-
-    struct gpio_desc *     led_en;
+    uint8_t                *buffer;
+    uint32_t               *pixbuf;
 
     unsigned char          brightness;
-    u32                    invert;
     u32                    num_leds;
 };
 
@@ -104,58 +103,19 @@ struct in_pi556_state {
 // Number of 3MHz bits in 80us to create a reset condition
 #define RESET_BYTES 32
 
-#define PWM_CTL 0x0
-#define PWM_STA 0x4
-#define PWM_DMAC 0x8
-#define PWM_RNG1 0x10
-#define PWM_DAT1 0x14
-#define PWM_FIFO1 0x18
-#define PWM_RNG2 0x20
-#define PWM_DAT2 0x24
-#define PWM_ID 0x50
+#define ADDR_LED_MODE 0x80000000
+
+#define PWM_FIFO 0x18
 
 #define PWM_DMA_DREQ 5
 
 static dev_t devid = MKDEV(1337, 0);
 
-/*
-** Functions to access the pwm peripheral
-*/
-static void pwm_writel(struct in_pi556_state * state, uint32_t val, uint32_t reg)
-{
-	writel(val, state->ioaddr + reg);
-}
-
-#if 0
-static uint32_t pwm_readl(struct in_pi556_state * state, uint32_t reg)
-{
-	return readl(state->ioaddr + reg);
-}
-#endif
-
 static int pwm_init(struct in_pi556_state * state)
 {
-	uint32_t reg;
-
-	// serial 32 bits per word
-	pwm_writel(state, 32, PWM_RNG1);
-	// Clear
-	pwm_writel(state, 0,  PWM_DAT1);
-
-	reg = (1 << 0) | /* CH1EN */
-	      (1 << 1) | /* serialiser */
-	      (0 << 2) | /* don't repeat last word */
-	      (0 << 3) | /* silence is zero */
-	      ((state->invert ? 1 : 0) << 4) | /* polarity */
-	      (1 << 5) | /* use fifo */
-	      (1 << 6) | /* Clear fifo */
-	      (1 << 7) | /* MSEN - Mask space enable */
-	      ((state->invert ? 1 : 0) << 11); /* Silence bit = 1 */
-	pwm_writel(state, reg, PWM_CTL);
-	reg = (1 << 31) | /* DMA enabled */
-	      (4 << 8)  | /* Threshold for panic */
-	      (8 << 0);   /* Threshold for dreq */
-	pwm_writel(state, reg, PWM_DMAC);
+	pwm_apply_args(state->pwm);
+	state->pwm->flags = ADDR_LED_MODE;
+	pwm_enable(state->pwm);
 
 	return 0;
 }
@@ -307,7 +267,6 @@ ssize_t in_pi556_write(struct file *filp, const char __user *buf, size_t count, 
 
 	if(copy_from_user(state->pixbuf, buf, num_leds * 4))
 		return -EFAULT;
-	pr_err("PIXBUF: 0x%x\n", state->pixbuf[0]);
 
 	p_rgb = state->pixbuf;
 	p_buffer = state->buffer;
@@ -364,6 +323,16 @@ static int in_pi556_probe(struct platform_device *pdev)
         goto fail;
     }
 
+    state->pwm = devm_pwm_get(&pdev->dev, NULL);
+    if (IS_ERR(state->pwm)) {
+    	ret = PTR_ERR(state->pwm);
+    	if(ret != -EPROBE_DEFER) {
+    		dev_err(dev, "Failed to request PWM channel");
+    	}
+    	kfree(state);
+    	return ret;
+    }
+
     state->dev = dev;
     state->brightness = 255;
 
@@ -397,9 +366,6 @@ static int in_pi556_probe(struct platform_device *pdev)
 
     /* get parameters from device tree */
     of_property_read_u32(node,
-                 "rpi,invert",
-                 &state->invert);
-    of_property_read_u32(node,
                  "rpi,num_leds",
                  &state->num_leds);
 
@@ -410,11 +376,6 @@ static int in_pi556_probe(struct platform_device *pdev)
 	}
 
     iomem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-    state->ioaddr = devm_ioremap_resource(dev, iomem);
-    if (IS_ERR(state->ioaddr)) {
-        goto fail_pixbuf;
-    }
-
     state->phys_addr = iomem->start + BCM2835_VCMMU_SHIFT;
 
     state->buffer = kmalloc(state->num_leds * BYTES_PER_LED + RESET_BYTES, GFP_KERNEL);
@@ -428,19 +389,20 @@ static int in_pi556_probe(struct platform_device *pdev)
     	dev_err(dev, "Failed to request DMA channel");
         goto fail_buffer;
     }
-
     /* request a DMA channel */
-    cfg.dst_addr = state->phys_addr + PWM_FIFO1;
+    cfg.dst_addr = state->phys_addr + PWM_FIFO;
     ret = dmaengine_slave_config(state->dma_chan, &cfg);
     if (state->dma_chan < 0) {
     	dev_err(dev, "Can't allocate DMA channel\n");
         goto fail_dma_init;
     }
+
 	pwm_init(state);
 
 	clear_leds(state);
 
     return 0;
+
 fail_dma_init:
     dma_release_channel(state->dma_chan);
 fail_buffer:
@@ -469,6 +431,7 @@ static int in_pi556_remove(struct platform_device *pdev)
 
     platform_set_drvdata(pdev, NULL);
 
+    pwm_disable(state->pwm);
     dma_release_channel(state->dma_chan);
     kfree(state->buffer);
     kfree(state->pixbuf);
