@@ -16,7 +16,8 @@
 				dmas = <&dma 5>;
 				dma-names = "pwm_dma";
 
-				rpi,invert = <0>;
+				pwms = <&pwm 0 1000000>;
+
 				rpi,num_leds = <1>;
 
 				status = "okay";
@@ -26,7 +27,6 @@
 	};
 
 	__overrides__ {
-	invert = <&in_pi556>,"rpi,invert:0";
         num_leds = <&in_pi556>,"rpi,num_leds:0";
 	};
 };
