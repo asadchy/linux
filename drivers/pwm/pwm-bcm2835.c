@@ -15,6 +15,7 @@
 #include <linux/pwm.h>
 
 #define PWM_CONTROL		0x000
+#define PWM_DMAC                0x8
 #define PWM_CONTROL_SHIFT(x)	((x) * 8)
 #define PWM_CONTROL_MASK	0xff
 #define PWM_MODE		0x80		/* set timer in PWM mode */
@@ -25,6 +26,9 @@
 #define DUTY(x)			(((x) * 0x10) + 0x14)
 
 #define MIN_PERIOD		108		/* 9.2 MHz max. PWM clock */
+
+#define ADDR_LED_MODE           0x80000000
+#define ADDR_LED_MASK           0xE3
 
 struct bcm2835_pwm {
 	struct pwm_chip chip;
@@ -94,7 +98,21 @@ static int bcm2835_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 
 	value = readl(pc->base + PWM_CONTROL);
 	value |= PWM_ENABLE << PWM_CONTROL_SHIFT(pwm->hwpwm);
+	if(pwm->flags & ADDR_LED_MODE) {
+		writel(32, pc->base + PERIOD(pwm->hwpwm));
+		writel(0, pc->base + DUTY(pwm->hwpwm));
+
+		value &= ~(PWM_CONTROL_MASK << PWM_CONTROL_SHIFT(pwm->hwpwm));
+		value |= (ADDR_LED_MASK << PWM_CONTROL_SHIFT(pwm->hwpwm));
+	}
 	writel(value, pc->base + PWM_CONTROL);
+
+	if(pwm->flags & ADDR_LED_MODE) {
+		value = (1 << 31) | /* DMA enabled */
+			    (4 << 8)  | /* Threshold for panic */
+			    (8 << 0);   /* Threshold for dreq */
+		writel(value, pc->base + PWM_DMAC);
+	}
 
 	return 0;
 }
