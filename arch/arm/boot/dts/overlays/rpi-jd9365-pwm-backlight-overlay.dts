@@ -18,7 +18,8 @@
 		target = <&pwm>;
 		__overlay__ {
 			pinctrl-names = "default";
-			pinctrl-0 = <&pwm0_gpio40>;
+			pinctrl-0 = <&pwm1_gpio45>;
+			assigned-clock-rates = <3012000>;
 			status = "okay";
 		};
 	};
@@ -28,7 +29,7 @@
 		__overlay__ {
 			backlight: backlight {
 				compatible = "pwm-backlight";
-				pwms = <&pwm 0 1000000>;
+				pwms = <&pwm 1 1000000>;
 				brightness-levels = <0 25 50 75 100>;
 				num-interpolated-steps = <25>;
 				default-brightness-level = <50>;
