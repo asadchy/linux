@@ -88,27 +88,20 @@
 	};
 
 	fragment@11 {
-		target = <&hdmi>;
-		__overlay__  {
-			status = "okay";
-		};
-	};
-
-	fragment@12 {
 		target = <&v3d>;
 		__overlay__  {
 			status = "okay";
 		};
 	};
 
-	fragment@13 {
+	fragment@12 {
 		target = <&vc4>;
 		__overlay__  {
 			status = "okay";
 		};
 	};
 
-	fragment@14 {
+	fragment@13 {
 		target = <&clocks>;
 		__overlay__  {
 			claim-clocks = <
@@ -120,24 +113,17 @@
 		};
 	};
 
-	fragment@15 {
+	fragment@14 {
 		target = <&vec>;
 		__overlay__  {
 			status = "okay";
 		};
 	};
 
-	fragment@16 {
+	fragment@15 {
 		target = <&txp>;
 		__overlay__  {
 			status = "okay";
-		};
-	};
-
-	fragment@17 {
-		target = <&hdmi>;
-		__dormant__  {
-			dmas;
 		};
 	};
 
