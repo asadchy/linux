@@ -130,6 +130,7 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
 	rpi-dac.dtbo \
 	rpi-display.dtbo \
 	rpi-goodix-gt928.dtbo \
+	rpi-050n021-gpio-backlight.dtbo \
 	rpi-jd9365-gpio-backlight.dtbo \
 	rpi-jd9365-pwm-backlight.dtbo \
 	rpi-ft5406.dtbo \
