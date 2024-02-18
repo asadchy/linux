@@ -16,4 +16,8 @@
 			};
 		};
 	};
+	
+	__overrides__ {
+		open_time = <&lock0>,"open-time:0";
+	};
 };
