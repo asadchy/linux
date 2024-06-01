@@ -59,6 +59,20 @@
 			};
 		};
 	};
+	
+	fragment@5 {
+		target-path = "/aliases";
+		__overlay__ {
+			mcp23017 = "i2c1/mcp@20";
+		};
+	};
+
+	fragment@6 {
+		target-path = "/__symbols__";
+		__overlay__ {
+			mcp23017 = "i2c1/mcp@20";
+		};
+	};
 
 	frag100: fragment@100 {
 		target = <&i2c1>;
