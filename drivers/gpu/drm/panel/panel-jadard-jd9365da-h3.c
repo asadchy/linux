@@ -55,6 +55,7 @@ static int jadard_enable(struct drm_panel *panel)
 	const struct jadard_panel_desc *desc = jadard->desc;
 	struct mipi_dsi_device *dsi = jadard->dsi;
 	unsigned int i;
+	unsigned int attempts;
 	int err;
 
 	msleep(10);
@@ -63,17 +64,25 @@ static int jadard_enable(struct drm_panel *panel)
 		const struct jadard_init_cmd *cmd = &desc->init_cmds[i];
 
 		err = mipi_dsi_dcs_write_buffer(dsi, cmd->data, JD9365DA_INIT_CMD_LEN);
-		if (err < 0)
-			return err;
+		if (err < 0) {
+			msleep(1000);
+                        --i;
+                }
 	}
 
 	msleep(120);
 
-	err = mipi_dsi_dcs_exit_sleep_mode(dsi);
+        attempts = 0;
+        do {
+                err = mipi_dsi_dcs_exit_sleep_mode(dsi);
+        } while((err < 0) && (++attempts < 3));
 	if (err < 0)
 		DRM_DEV_ERROR(dev, "failed to exit sleep mode ret = %d\n", err);
 
-	err =  mipi_dsi_dcs_set_display_on(dsi);
+        attempts = 0;
+        do {
+                err =  mipi_dsi_dcs_set_display_on(dsi);
+        } while((err < 0) && (++attempts < 3));
 	if (err < 0)
 		DRM_DEV_ERROR(dev, "failed to set display on ret = %d\n", err);
 
@@ -84,13 +93,20 @@ static int jadard_disable(struct drm_panel *panel)
 {
 	struct device *dev = panel->dev;
 	struct jadard *jadard = panel_to_jadard(panel);
+	unsigned int attempts;
 	int ret;
 
-	ret = mipi_dsi_dcs_set_display_off(jadard->dsi);
+        attempts = 0;
+        do {
+                ret = mipi_dsi_dcs_set_display_off(jadard->dsi);
+        } while((ret < 0) && (++attempts < 3));
 	if (ret < 0)
 		DRM_DEV_ERROR(dev, "failed to set display off: %d\n", ret);
 
-	ret = mipi_dsi_dcs_enter_sleep_mode(jadard->dsi);
+        attempts = 0;
+        do {
+                ret = mipi_dsi_dcs_enter_sleep_mode(jadard->dsi);
+        } while((ret < 0) && (++attempts < 3));
 	if (ret < 0)
 		DRM_DEV_ERROR(dev, "failed to enter sleep mode: %d\n", ret);
 
@@ -659,6 +675,10 @@ static const struct of_device_id jadard_of_match[] = {
 	{
 		.compatible = "radxa,display-8hd-ad002",
 		.data = &radxa_display_8hd_ad002_desc
+	},
+	{
+		.compatible = "fiti,jd9365",
+		.data = &cz101b4001_desc
 	},
 	{ /* sentinel */ }
 };
