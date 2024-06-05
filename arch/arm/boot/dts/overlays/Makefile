@@ -327,6 +327,8 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
 	w1-gpio-pullup-pi5.dtbo \
 	w5500.dtbo \
 	watterott-display.dtbo \
+	rpi-jd9365-gpio-backlight.dtbo \
+	rpi-jd9365-pwm-backlight.dtbo \
 	waveshare-can-fd-hat-mode-a.dtbo \
 	waveshare-can-fd-hat-mode-b.dtbo \
 	wittypi.dtbo \
