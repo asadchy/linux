@@ -86,7 +86,7 @@ static int audioinjector_pi_soundcard_dai_init(struct snd_soc_pcm_runtime *rtd)
 
 SND_SOC_DAILINK_DEFS(audioinjector_pi,
 	DAILINK_COMP_ARRAY(COMP_CPU("bcm2708-i2s.0")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("wm8731.1-001a", "wm8731-hifi")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("wm8731.0-001a", "wm8731-hifi")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("bcm2835-i2s.0")));
 
 static struct snd_soc_dai_link audioinjector_pi_soundcard_dai[] = {
