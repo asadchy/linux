@@ -1,0 +1,32 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2835", "brcm,bcm2708", "brcm,bcm2709";
+
+	fragment@0 {
+		target = <&soc>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			in_pi556: in_pi556 {
+				compatible = "rpi,in-pi556";
+				reg = <0x7e20c000 0x100>; /* PWM */
+				dmas = <&dma 5>;
+				dma-names = "pwm_dma";
+
+				pwms = <&pwm 0 1000000 0>;
+
+				rpi,num_leds = <1>;
+
+				status = "okay";
+
+			};
+		};
+	};
+
+	__overrides__ {
+        num_leds = <&in_pi556>,"rpi,num_leds:0";
+	};
+};
