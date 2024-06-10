@@ -70,3 +70,4 @@ obj-$(CONFIG_TPS6594_ESM)	+= tps6594-esm.o
 obj-$(CONFIG_TPS6594_PFSM)	+= tps6594-pfsm.o
 obj-$(CONFIG_MFRC522) += mfrc522.o
 obj-$(CONFIG_DOOR_LOCK) += door_lock.o
+obj-$(CONFIG_IN_PI556) += in_pi556.o
