@@ -68,6 +68,13 @@
 			clock-frequency = <25000000>;
 		};
 	};
+	
+	fragment@6 {
+		target = <&cam_node>;
+		__overlay__ {
+			pwdn-gpios = <&gpio 12 1>;
+		};
+	};
 
 	__overrides__ {
 		rotation = <&cam_node>,"rotation:0";
@@ -78,7 +85,7 @@
 		       <&reg_frag>, "target:0=",<&cam0_reg>,
 		       <&clk_frag>, "target:0=",<&cam0_clk>,
 		       <&cam_node>, "clocks:0=",<&cam0_clk>,
-		       <&cam_node>, "avdd-supply:0=",<&cam0_reg>,
+		       <&cam_node>, "avdd-supply:0=",<&cam_dummy_reg>,
 		       <&vcm_node>, "VANA-supply:0=",<&cam0_reg>;
 		vcm = <&vcm_node>, "status=okay",
 		       <&cam_node>,"lens-focus:0=", <&vcm_node>;
