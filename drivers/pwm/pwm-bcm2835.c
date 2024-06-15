@@ -12,6 +12,7 @@
 #include <linux/pwm.h>
 
 #define PWM_CONTROL		0x000
+#define PWM_DMAC        0x8
 #define PWM_CONTROL_SHIFT(x)	((x) * 8)
 #define PWM_CONTROL_MASK	0xff
 #define PWM_MODE		0x80		/* set timer in PWM mode */
@@ -22,6 +23,9 @@
 #define DUTY(x)			(((x) * 0x10) + 0x14)
 
 #define PERIOD_MIN		0x2
+
+#define ADDR_LED_MODE   0x80000000
+#define ADDR_LED_MASK   0xE3
 
 struct bcm2835_pwm {
 	struct pwm_chip chip;
@@ -110,12 +114,31 @@ static int bcm2835_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 		val |= PWM_POLARITY << PWM_CONTROL_SHIFT(pwm->hwpwm);
 
 	/* enable/disable */
-	if (state->enabled)
+	if (state->enabled) {
 		val |= PWM_ENABLE << PWM_CONTROL_SHIFT(pwm->hwpwm);
-	else
-		val &= ~(PWM_ENABLE << PWM_CONTROL_SHIFT(pwm->hwpwm));
+		
+		if(pwm->flags & ADDR_LED_MODE) {
+		    writel(32, pc->base + PERIOD(pwm->hwpwm));
+		    writel(0, pc->base + DUTY(pwm->hwpwm));
 
+		    val &= ~(PWM_CONTROL_MASK << PWM_CONTROL_SHIFT(pwm->hwpwm));
+		    val |= (ADDR_LED_MASK << PWM_CONTROL_SHIFT(pwm->hwpwm));
+	    }
+	}
+	else {
+		val &= ~(PWM_ENABLE << PWM_CONTROL_SHIFT(pwm->hwpwm));
+    }
+		
 	writel(val, pc->base + PWM_CONTROL);
+	
+	if (state->enabled) {
+	    if(pwm->flags & ADDR_LED_MODE) {
+		    val = (1 << 31) | /* DMA enabled */
+			      (4 << 8)  | /* Threshold for panic */
+			      (8 << 0);   /* Threshold for dreq */
+		    writel(val, pc->base + PWM_DMAC);
+	    }
+	}
 
 	return 0;
 }
