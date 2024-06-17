@@ -578,6 +578,15 @@ int wm8731_init(struct device *dev, struct wm8731_priv *wm8731)
 			return ret;
 		}
 	}
+	
+	wm8731->gpiod_mute = devm_gpiod_get_optional(dev, "mute", GPIOD_OUT_HIGH);
+	if (IS_ERR(wm8731->gpiod_mute)) {
+		ret = PTR_ERR(wm8731->gpiod_mute);
+		if (ret != -EPROBE_DEFER)
+			dev_dbg(dev, "Failed to get %s GPIO: %d\n",
+				"mute", ret);
+		return ret;
+	}
 
 	mutex_init(&wm8731->lock);
 

@@ -15,6 +15,7 @@
 #include <linux/mutex.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
+#include <linux/gpio/consumer.h>
 
 struct clk;
 struct snd_pcm_hw_constraint_list;
@@ -47,6 +48,7 @@ struct wm8731_priv {
 	struct regmap *regmap;
 	struct clk *mclk;
 	struct regulator_bulk_data supplies[WM8731_NUM_SUPPLIES];
+	struct gpio_desc *gpiod_mute;
 	const struct snd_pcm_hw_constraint_list *constraints;
 	unsigned int sysclk;
 	int sysclk_type;
