@@ -349,12 +349,22 @@ static int wm8731_hw_params(struct snd_pcm_substream *substream,
 static int wm8731_mute(struct snd_soc_dai *dai, int mute, int direction)
 {
 	struct snd_soc_component *component = dai->component;
+	struct wm8731_priv *ctx = dev_get_drvdata(dai->dev);
 	u16 mute_reg = snd_soc_component_read(component, WM8731_APDIGI) & 0xfff7;
 
-	if (mute)
+	if (mute) {
+		if(ctx->gpiod_mute) {
+			gpiod_set_value_cansleep(ctx->gpiod_mute, 1);
+			msleep(100);
+		}
 		snd_soc_component_write(component, WM8731_APDIGI, mute_reg | 0x8);
-	else
+	} else {
 		snd_soc_component_write(component, WM8731_APDIGI, mute_reg);
+		if(ctx->gpiod_mute) {
+    	    msleep(250);
+		    gpiod_set_value_cansleep(ctx->gpiod_mute, 0);
+		}
+	}
 	return 0;
 }
 
