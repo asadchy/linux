@@ -11,7 +11,7 @@
 				compatible = "door_lock";
 				lock-gpios = <&gpio 37 0>;
 				interrupt-parent = <&gpio>;
-				interrupts = <43 2>; // high-to-low edge triggered
+				interrupts = <27 2>; // high-to-low edge triggered
 				open-time = <3000>; //milliseconds
 			};
 		};
